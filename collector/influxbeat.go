@@ -196,12 +196,14 @@ func (c *influxbeatCollector) Collect(ch chan<- prometheus.Metric) {
 		inputBytes, _ := json.Marshal(c.stats.Filebeat.Input)
 		json.Unmarshal(inputBytes, &inputStats)
 
-		// TODO: delete regex, now prometheus not expose fqName public
+		// TODO: delete regex
 		fqNameRegexp := regexp.MustCompile(`^Desc{fqName: "(\w+)", help:`)
 		hits := fqNameRegexp.FindStringSubmatch(i.desc.String())
 		fqName := ""
 		if hits != nil && len(hits) >= 2 {
 			fqName = hits[1]
+		} else {
+			continue
 		}
 
 		eventsPt, _ := influx.NewPoint(
