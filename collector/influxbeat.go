@@ -5,6 +5,7 @@ import (
 	influx "github.com/influxdata/influxdb/client/v2"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
+	"os"
 	"regexp"
 	"time"
 )
@@ -42,12 +43,24 @@ type influxbeatCollector struct {
 	influxClient influx.Client
 }
 
+func getEnv(key, defaultVal string) string {
+	value := os.Getenv(key)
+	if value == "" {
+		return defaultVal
+	}
+	return value
+}
+
 // NewInluxbeatCollector constructor
 func NewInfluxbeatCollector(beatInfo *BeatInfo, stats *Stats) prometheus.Collector {
+	influxdbAddr := getEnv("INFLUXDB_URL", "http://localhost:8086")
+	influxdbUsername := getEnv("INFLUXDB_USERNAME", "")
+	influxdbPassword := getEnv("INFLUXDB_PASSWORD", "")
+
 	influxClient, _ := influx.NewHTTPClient(influx.HTTPConfig{
-		Addr:     "http://localhost:8086",
-		Username: "",
-		Password: "",
+		Addr:     influxdbAddr,
+		Username: influxdbUsername,
+		Password: influxdbPassword,
 	})
 	defer influxClient.Close()
 
@@ -159,8 +172,10 @@ func (c *influxbeatCollector) Describe(ch chan<- *prometheus.Desc) {
 
 // Collect returns the current state of all metrics of the collector.
 func (c *influxbeatCollector) Collect(ch chan<- prometheus.Metric) {
+	influxdbDB := getEnv("INFLUXDB_DB", "dashbase_filebeat")
+
 	bp, err := influx.NewBatchPoints(influx.BatchPointsConfig{
-		Database:  "dashbase_metric",
+		Database:  influxdbDB,
 		Precision: "s",
 	})
 	if err != nil {

@@ -13,10 +13,10 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
+	"github.com/dashbase/beat-exporter/collector"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/common/version"
-	"github.com/dashbase/beat-exporter/collector"
 )
 
 func main() {
@@ -71,22 +71,31 @@ func main() {
 	registry := prometheus.NewRegistry()
 	versionMetric := version.NewCollector(Name)
 	mainCollector := collector.NewMainCollector(httpClient, beatURL, Name, beatInfo)
+
 	registry.MustRegister(versionMetric)
 	registry.MustRegister(mainCollector)
 
-	http.Handle(*metricsPath, promhttp.HandlerFor(
+	promHandler := promhttp.HandlerFor(
 		registry,
 		promhttp.HandlerOpts{
 			ErrorLog:           log.New(),
 			DisableCompression: false,
-			ErrorHandling:      promhttp.ContinueOnError}),
+			ErrorHandling:      promhttp.ContinueOnError},
 	)
+	http.Handle(*metricsPath, promHandler)
 
 	http.HandleFunc("/", IndexHandler(*metricsPath))
 
 	log.WithFields(log.Fields{
 		"addr": *listenAddress,
 	}).Infof("Starting exporter with configured type: %s", beatInfo.Beat)
+
+	ticker := time.NewTicker(time.Second * 1)
+	go func() {
+		for range ticker.C {
+			registry.Gather()
+		}
+	}()
 
 	if err := http.ListenAndServe(*listenAddress, nil); err != nil {
 
